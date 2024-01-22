@@ -1,3 +1,9 @@
+# Ignore DS Store
+**/.DS_Store
+
+# Ignore output dir
+./output/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

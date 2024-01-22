@@ -1,3 +1,4 @@
+import argparse
 import json
 import requests
 import pandas as pd
@@ -9,15 +10,18 @@ def create_output_directory(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+def set_to_read_only():
+    get_user_profile();
+
 # Step 1: Get User Profile Template
-def get_user_profile(api_token):
+def get_user_profile(api_token, date_time):
     url = 'https://nick-sandbox-rightstart.alationproserv.com/admin/export/all_user_profiles/'
     headers = {
         'TOKEN': api_token,
         'Cookie': 'csrftoken=VRL9i4mt8NLwwagqBzLAITkJr0NhbD7oTFIQvH9CzTQ6z7RNcAduJtbXHn0WXn5J; sessionid=53f5r4s5pgoeglqn5hkwvgv16h78v470'
     }
     response = requests.get(url, headers=headers)
-    date_time = datetime.now().strftime("%Y-%d-%m_%H:%M:%S")
+    
     output_dir = f"./output/{date_time}"
     create_output_directory(output_dir)
     file_path = f"{output_dir}/original_user_profiles.csv"
@@ -86,11 +90,60 @@ def import_user_profiles(api_token, updated_csv_path, date_time):
     else:
         print("Failed to import user profiles. Status Code:", response.status_code)
 
-# Replace '{{MY_API_TOKEN}}' with your actual API token
-api_token = '{{MY_API_TOKEN}}'
+def main():
+    # Create arg parser
+    parser = argparse.ArgumentParser(description='Script to manage Alation user profiles.')
 
-# Execute the steps
-csv_path, date_time = get_user_profile(api_token)
-updated_csv_path = update_user_profiles(csv_path, date_time)
-parse_user_profile_changes(api_token, date_time)
-import_user_profiles(api_token, updated_csv_path)
+    # Add arguments
+    parser.add_argument(
+        '--token',
+        type=str,
+        default=os.environ.get('ALATION_TOKEN', None),
+        required=os.environ.get('ALATION_TOKEN', None) is None,
+        help='Alation API Token'
+    )
+
+    parser.add_argument(
+        '--undo-read-only',
+        action='store_true',
+        default=False,
+        help='Undo read-only mode and put Alation back into write mode. Use in conjunction with the original-user-profile-file argument.'
+    )
+
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        default=False,
+        help='Runs the script in "dry run" mode and will not update anything.'
+    )
+
+    parser.add_argument(
+        '--original-user-profile-file',
+        type=str,
+        help='Original user profile file that needs to be restored'
+    )
+
+    args = parser.parse_args()
+
+    # Validate undo mode args
+    if args.undo_read_only and not args.original_user_profile_file:
+        parser.error('--original-user-profile-file is required when --undo-read-only is set.')
+
+    date_time = datetime.now().strftime("%Y-%d-%m_%H:%M:%S")
+    api_token = args.token
+
+    if not args.undo_read_only:
+        # Read only mode:
+        csv_path, date_time = get_user_profile(api_token, date_time)
+        updated_user_profile_csv_path = update_user_profiles(csv_path, date_time)
+        parse_user_profile_changes(api_token, date_time, updated_user_profile_csv_path)
+        if not args.dry_run:
+            import_user_profiles(api_token, updated_user_profile_csv_path)
+    else:
+        # Undo mode:
+        if not args.dry_run:
+            parse_user_profile_changes(api_token, date_time)
+            import_user_profiles(api_token, date_time, args.original_user_profile_file)
+
+if __name__ == "__main__":
+    main()
