@@ -30,34 +30,51 @@ def get_user_profile(api_token, date_time):
     return file_path, date_time
 
 # Step 2: Update User Profiles
-def update_user_profiles(csv_path, date_time):
+def update_user_profiles(csv_path, date_time, except_users):
     df = pd.read_csv(csv_path)
-    df['role'] = 'VIEWER'  # Set all roles to VIEWER
+    # Only update roles for users not in the except-users list
+    df['role'] = df.apply(lambda row: 'VIEWER' if row['email'] not in except_users else row['role'], axis=1)
     updated_csv_path = f"./output/{date_time}/updated_user_profiles.csv"
     df.to_csv(updated_csv_path, index=False)
     return updated_csv_path
 
+
 def parse_user_profile_changes(api_token, date_time, updated_csv_path):
-    # Assuming the API requires the updated CSV file as input
-    # Read the updated CSV and prepare data for the request
+    url = 'https://nick-sandbox-rightstart.alationproserv.com/admin/parse_user_profiles/?qqfile=alation_user_profiles.csv'
+    headers = {
+        'token': api_token,
+        'authority': 'nick-sandbox-rightstart.alationproserv.com',
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9',
+        'cache-control': 'no-cache',
+        'content-type': 'application/octet-stream',
+        'origin': 'https://nick-sandbox-rightstart.alationproserv.com',
+        'referer': 'https://nick-sandbox-rightstart.alationproserv.com/admin/user_profiles/',
+        'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'x-file-name': 'alation_user_profiles.csv',
+        'x-mime-type': 'text/csv',
+        'x-requested-with': 'XMLHttpRequest'
+    }
+    
     with open(updated_csv_path, 'rb') as file:
-        files = {'file': file}
-        url = 'https://nick-sandbox-rightstart.alationproserv.com/api/parse_changes/'
-        headers = {
-            'TOKEN': api_token,
-            # Add other necessary headers here
-        }
-        response = requests.post(url, headers=headers, files=files)
-        if response.status_code == 200:
-            # Assuming the API returns the expected JSON response
-            output_path = f"./output/{date_time}/parsed_user_profiles.json"
-            with open(output_path, 'w') as json_file:
-                json.dump(response.json(), json_file, indent=4)
-        else:
-            print("Failed to parse user profile changes. Status Code:", response.status_code)
+        response = requests.post(url, headers=headers, data=file)
+
+    if response.status_code == 200:
+        output_path = f"./output/{date_time}/parsed_user_profiles.json"
+        with open(output_path, 'w') as json_file:
+            json.dump(response.json(), json_file, indent=4)
+        print("User profile changes parsed and saved to", output_path)
+    else:
+        print("Failed to parse user profile changes. Status Code:", response.status_code, "Response:", response.text)
 
 # Step 4: Import User Profiles
-def import_user_profiles(api_token, updated_csv_path, date_time):
+def import_user_profiles(api_token, date_time, updated_csv_path):
     # Read the updated CSV file
     df = pd.read_csv(updated_csv_path)
 
@@ -104,6 +121,14 @@ def main():
     )
 
     parser.add_argument(
+        '--except-users',
+        nargs='*',
+        type=str,
+        default=[],
+        help='A list of usernames (email addresses) for users that should not be changed to VIEWER'
+    )
+
+    parser.add_argument(
         '--undo-read-only',
         action='store_true',
         default=False,
@@ -125,24 +150,25 @@ def main():
 
     args = parser.parse_args()
 
-    # Validate undo mode args
+    # Validate arg combos
     if args.undo_read_only and not args.original_user_profile_file:
         parser.error('--original-user-profile-file is required when --undo-read-only is set.')
 
-    date_time = datetime.now().strftime("%Y-%d-%m_%H:%M:%S")
+    date_time = datetime.now().strftime("%Y_%d_%m_%H_%M_%S")
     api_token = args.token
+    except_users = args.except_users if args.except_users is not None else []
 
     if not args.undo_read_only:
         # Read only mode:
         csv_path, date_time = get_user_profile(api_token, date_time)
-        updated_user_profile_csv_path = update_user_profiles(csv_path, date_time)
+        updated_user_profile_csv_path = update_user_profiles(csv_path, date_time, except_users)
         parse_user_profile_changes(api_token, date_time, updated_user_profile_csv_path)
         if not args.dry_run:
-            import_user_profiles(api_token, updated_user_profile_csv_path)
+            import_user_profiles(api_token, date_time, updated_user_profile_csv_path)
     else:
         # Undo mode:
         if not args.dry_run:
-            parse_user_profile_changes(api_token, date_time)
+            parse_user_profile_changes(api_token, date_time, args.original_user_profile_file)
             import_user_profiles(api_token, date_time, args.original_user_profile_file)
 
 if __name__ == "__main__":
