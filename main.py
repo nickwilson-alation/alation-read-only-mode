@@ -14,7 +14,7 @@ def set_to_read_only():
     get_user_profile();
 
 # Step 1: Get User Profile Template
-def get_user_profile(api_token, date_time):
+def get_user_profile(api_token, date_time, output_dir):
     url = 'https://nick-sandbox-rightstart.alationproserv.com/admin/export/all_user_profiles/'
     headers = {
         'TOKEN': api_token,
@@ -22,8 +22,6 @@ def get_user_profile(api_token, date_time):
     }
     response = requests.get(url, headers=headers)
     
-    output_dir = f"./output/{date_time}"
-    create_output_directory(output_dir)
     file_path = f"{output_dir}/original_user_profiles.csv"
     with open(file_path, 'w') as file:
         file.write(response.text)
@@ -39,8 +37,10 @@ def update_user_profiles(csv_path, date_time, except_users):
     return updated_csv_path
 
 
-def parse_user_profile_changes(api_token, date_time, updated_csv_path):
-    url = 'https://nick-sandbox-rightstart.alationproserv.com/admin/parse_user_profiles/?qqfile=alation_user_profiles.csv'
+def parse_user_profile_changes(api_token, date_time, updated_csv_path, output_dir):
+    # Extract filename from the path
+    filename = os.path.basename(updated_csv_path)
+    url = f'https://nick-sandbox-rightstart.alationproserv.com/admin/parse_user_profiles/?qqfile={filename}'
     headers = {
         'token': api_token,
         'authority': 'nick-sandbox-rightstart.alationproserv.com',
@@ -57,7 +57,7 @@ def parse_user_profile_changes(api_token, date_time, updated_csv_path):
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-origin',
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'x-file-name': 'alation_user_profiles.csv',
+        'x-file-name': filename,
         'x-mime-type': 'text/csv',
         'x-requested-with': 'XMLHttpRequest'
     }
@@ -66,7 +66,7 @@ def parse_user_profile_changes(api_token, date_time, updated_csv_path):
         response = requests.post(url, headers=headers, data=file)
 
     if response.status_code == 200:
-        output_path = f"./output/{date_time}/parsed_user_profiles.json"
+        output_path = f"{output_dir}/parsed_user_profiles.json"
         with open(output_path, 'w') as json_file:
             json.dump(response.json(), json_file, indent=4)
         print("User profile changes parsed and saved to", output_path)
@@ -157,18 +157,20 @@ def main():
     date_time = datetime.now().strftime("%Y_%d_%m_%H_%M_%S")
     api_token = args.token
     except_users = args.except_users if args.except_users is not None else []
+    output_dir = f"./output/{date_time}"
+    create_output_directory(output_dir)
 
     if not args.undo_read_only:
         # Read only mode:
-        csv_path, date_time = get_user_profile(api_token, date_time)
+        csv_path, date_time = get_user_profile(api_token, date_time, output_dir)
         updated_user_profile_csv_path = update_user_profiles(csv_path, date_time, except_users)
-        parse_user_profile_changes(api_token, date_time, updated_user_profile_csv_path)
+        parse_user_profile_changes(api_token, date_time, updated_user_profile_csv_path, output_dir)
         if not args.dry_run:
             import_user_profiles(api_token, date_time, updated_user_profile_csv_path)
     else:
         # Undo mode:
         if not args.dry_run:
-            parse_user_profile_changes(api_token, date_time, args.original_user_profile_file)
+            parse_user_profile_changes(api_token, date_time, args.original_user_profile_file, output_dir)
             import_user_profiles(api_token, date_time, args.original_user_profile_file)
 
 if __name__ == "__main__":
