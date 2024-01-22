@@ -3,6 +3,7 @@
 
 # Ignore output dir
 ./output/
+/output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
