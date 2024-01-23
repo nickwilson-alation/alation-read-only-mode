@@ -17,8 +17,7 @@ def set_to_read_only():
 def get_user_profile(api_token, date_time, output_dir):
     url = 'https://nick-sandbox-rightstart.alationproserv.com/admin/export/all_user_profiles/'
     headers = {
-        'TOKEN': api_token,
-        'Cookie': 'csrftoken=VRL9i4mt8NLwwagqBzLAITkJr0NhbD7oTFIQvH9CzTQ6z7RNcAduJtbXHn0WXn5J; sessionid=53f5r4s5pgoeglqn5hkwvgv16h78v470'
+        'token': api_token,
     }
     response = requests.get(url, headers=headers)
     
@@ -43,23 +42,8 @@ def parse_user_profile_changes(api_token, date_time, updated_csv_path, output_di
     url = f'https://nick-sandbox-rightstart.alationproserv.com/admin/parse_user_profiles/?qqfile={filename}'
     headers = {
         'token': api_token,
-        'authority': 'nick-sandbox-rightstart.alationproserv.com',
-        'accept': '*/*',
-        'accept-language': 'en-US,en;q=0.9',
-        'cache-control': 'no-cache',
-        'content-type': 'application/octet-stream',
-        'origin': 'https://nick-sandbox-rightstart.alationproserv.com',
-        'referer': 'https://nick-sandbox-rightstart.alationproserv.com/admin/user_profiles/',
-        'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"macOS"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'x-file-name': filename,
         'x-mime-type': 'text/csv',
-        'x-requested-with': 'XMLHttpRequest'
     }
     
     with open(updated_csv_path, 'rb') as file:
@@ -91,14 +75,12 @@ def import_user_profiles(api_token, date_time, updated_csv_path):
     }
 
     # Format the payload as 'application/x-www-form-urlencoded'
-    formatted_payload = f"csrfmiddlewaretoken=WISrYX3tCCCBJFAj2ewraJce05zxMQ9BtoiYeJyzZCKstj8qj0Lf4U6pnQ9z5Jsi&payload={json.dumps(payload)}&overwrite=yes"
+    formatted_payload = f"payload={json.dumps(payload)}&overwrite=yes"
 
     url = 'https://nick-sandbox-rightstart.alationproserv.com/admin/import_user_profiles/'
     headers = {
         'TOKEN': api_token,
-        # Add other necessary headers here
         'content-type': 'application/x-www-form-urlencoded; charset=UTF-8'
-        # Include other headers as per your cURL command
     }
 
     response = requests.post(url, headers=headers, data=formatted_payload)
